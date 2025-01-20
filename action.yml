@@ -4,6 +4,9 @@ inputs:
   github-token:
     description: Github token to authorize
     required: true
+  repository:
+    description: Repository name to override github.repository
+    required: false
 
 runs:
   using: 'composite'
@@ -31,20 +34,23 @@ runs:
       shell: sh
       run: echo "commit=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_OUTPUT
 
+    - name: Set repository
+      id: set_repository
+      shell: sh
+      run: echo "repo=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
+
     - name: Build and push
       uses: docker/build-push-action@v4
       with:
         context: .
         push: true
-        tags: ghcr.io/${{ github.repository }}:${{ steps.sha_short.outputs.commit }}
+        tags: ghcr.io/${{ steps.set_repository.outputs.repo }}:${{ steps.sha_short.outputs.commit }}
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache-new
 
-      # This ugly bit is necessary if you don't want your cache to grow forever till it hits GitHub's limit of 5GB.
-      # https://github.com/docker/build-push-action/issues/252
-      # https://github.com/moby/buildkit/issues/1896
     - name: Move cache
       shell: sh
       run: |
         rm -rf /tmp/.buildx-cache
         mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
